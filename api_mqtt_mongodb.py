@@ -1,12 +1,16 @@
-import paho.mqtt.client as mqtt
+import datetime
 import json
+
+import paho.mqtt.client as mqtt
 import pymongo
 
 # mongoDB server link
-db_host_mongo_db_atlas = "mongodb+srv://secterica:iotlvivua2020@sectericacluster-dkxim.mongodb.net/test?retryWrites=true&w=majority"
+with open('../secret.json') as f:
+    SECRET = json.load(f)
+db_host_mongo_db_atlas = SECRET['mongo_db_link']
 
 db_name = 'HeySmell'
-collection_name = 'sensors_data'
+collection_name = 'air_quality'
 
 # link on public mqtt broker server we use right now (from HiveMQ)
 broker = "broker.hivemq.com"
@@ -25,9 +29,11 @@ topic_control = "secterica/heysmell/control"
 client_name = "heysmell"
 
 
-# here are actions, which are done by script, when we get message from topic
-# actions: inserts message in mongoDB collection, if it`s in json format
 def on_message(client, userdata, message):
+    """
+    here are actions, which are done by script, when we get message from topic
+    actions: inserts message in mongoDB collection, if it`s in json format
+    """
     returned_message = str(message.payload.decode("utf-8"))
     print("message topic:", message.topic)
     print("message:", returned_message)
@@ -52,15 +58,23 @@ def on_disconnect(client, userdata, flags, rc):
     print('Disconnected from broker' + broker + ', returned code' + str(rc))
 
 
-# inserts message in mongoDB collection
 def insert_message_into_mongodb(message):
+    """
+    inserts message in mongoDB collection
+    """
+
+    # add possibility for multiple stations
+    # collection.delete_one(filter={'_id': collection.find_one()['_id']})
     record = json.loads(message)
+    record['dateTime'] = datetime.datetime.now()
+    record['_class'] = "ua.lviv.iot.secterica.heysmell.model.AirQualityDuringDay"
     collection.insert_one(record)
     print('message saved to collection ' + collection_name + ' in database ' + db_name)
 
 
 # here we connect to mongoDb and create database and collection in it if it doesnt exist
 # if db with such name is already in use it will just connect to it
+
 connection = pymongo.MongoClient(host=db_host_mongo_db_atlas)
 database = connection[db_name]
 collection = database[collection_name]
@@ -86,6 +100,3 @@ print("Subscribed to topic", topic_subscribe)
 while True:
     client.loop()
 
-    #
-    # if statement to disconnect here
-    #
